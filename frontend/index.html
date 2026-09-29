@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Watchlist</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Stock Watchlist</h1>
+
+      <form id="add-form">
+        <input name="symbol" placeholder="Symbol (e.g. TCS)" required />
+        <input name="quantity" type="number" placeholder="Quantity" min="0" step="any" required />
+        <input name="buy_price" type="number" placeholder="Buy price" min="0" step="any" required />
+        <button type="submit">Add</button>
+      </form>
+      <p id="error" class="error"></p>
+
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Qty</th><th>Buy price</th><th>Invested</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <p class="total">Total invested: <strong id="total">0.00</strong></p>
+    </main>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
