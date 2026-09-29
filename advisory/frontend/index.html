@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TradeSmart Advisory</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <!-- Logo cropped from the brand book (p5). Text wordmark shows only if the file is missing. -->
+        <img src="/tradesmart-logo.png" alt="TradeSmart" class="logo" onerror="this.remove()" />
+        <span class="wordmark">TradeSmart</span>
+        <span class="product">Advisory</span>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-view="recs" role="tab">RECOMMENDATIONS</button>
+        <button class="tab" data-view="news" role="tab">NEWS</button>
+      </nav>
+      <div id="source" class="source"></div>
+    </header>
+
+    <main>
+      <div class="banner">
+        <span class="banner-icon" aria-hidden="true">ⓘ</span>
+        <p><strong>Test build with sample data.</strong> Disclaimer: The securities are quoted as an example and not as a recommendation.</p>
+      </div>
+
+      <section id="view-recs">
+        <div id="summary" class="summary"></div>
+
+        <div class="controls">
+          <div class="chips" id="filters">
+            <button class="chip selected" data-action="">ALL</button>
+            <button class="chip" data-action="BUY">BUY</button>
+            <button class="chip" data-action="SELL">SELL</button>
+            <button class="chip" data-action="HOLD">HOLD</button>
+          </div>
+          <input id="search" class="search" type="search" placeholder="Search stock or sector" />
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Stock</th><th>Call</th><th class="num">Entry</th><th class="num">CMP</th>
+                <th class="num">Target</th><th class="num">Stop loss</th><th class="num">Potential</th>
+                <th>SL → Target</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-news" hidden>
+        <ul id="news" class="news"></ul>
+      </section>
+    </main>
+
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <button id="drawer-close" class="drawer-close" aria-label="Close">×</button>
+      <div id="drawer-body"></div>
+    </aside>
+    <div id="scrim" class="scrim"></div>
+
+    <footer class="footer">
+      <p>www.tradesmartonline.in l +91 022-61208000</p>
+      <p>Disclaimer: The securities are quoted as an example and not as a recommendation. Sample data for testing only.</p>
+    </footer>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

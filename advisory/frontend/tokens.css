@@ -1,0 +1,51 @@
+/* TradeSmart design tokens — values from the TradeSmart Design System (brand book p7 + product UI). */
+:root {
+  /* Brand */
+  --ts-blue: #3f71eb;          /* the single action colour: buttons, active tabs, links */
+  --ts-blue-hover: #3563d6;
+  --ts-blue-press: #2c55bd;
+  --ts-blue-40: #b2c6f7;       /* focus ring */
+  --ts-blue-10: #ecf1fd;       /* selected chip fill, ice-blue background */
+  --ts-navy: #151e34;          /* headlines, strong text */
+  --ts-yellow: #eeb268;
+  --ts-cream: #fdf7f0;         /* info banner */
+  --ts-red: #e02b59;           /* loss / SELL only */
+  --ts-red-10: #fce9ee;
+  --ts-green: #00b48e;         /* gain — fills and dots */
+  /* Brand green #00B48E is 2.7:1 on white (fails WCAG for text), so gain TEXT uses a darker shade. */
+  --ts-green-text: #00866a;
+  --ts-green-10: #e5f7f3;
+
+  /* Neutrals */
+  --ts-white: #ffffff;
+  --ts-gray-50: #f6f7f9;
+  --ts-gray-100: #eef0f3;
+  --ts-hairline: #dfe2e8;
+  --ts-gray-600: #5b6474;
+
+  /* Type */
+  --ts-font: "Roboto", "Trebuchet MS", system-ui, sans-serif;
+  --ts-text-sm: 12px;
+  --ts-text: 14px;
+  --ts-label: 13px;            /* ALL-CAPS labels, 0.06em tracking */
+  --ts-h2: 20px;
+  --ts-h1: 24px;
+
+  /* Spacing — 4px grid */
+  --ts-space-1: 4px;
+  --ts-space-2: 8px;
+  --ts-space-3: 12px;
+  --ts-space-4: 16px;
+  --ts-space-6: 24px;
+
+  /* Radii */
+  --ts-radius-sm: 6px;         /* fields, chips */
+  --ts-radius-md: 10px;        /* cards, banners */
+  --ts-radius-lg: 16px;        /* modals / drawers */
+  --ts-radius-pill: 999px;     /* CTAs, search */
+
+  /* Effects */
+  --ts-shadow-card: 0 1px 3px rgba(21, 30, 52, 0.08);
+  --ts-shadow-float: 0 4px 14px rgba(21, 30, 52, 0.12);
+  --ts-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

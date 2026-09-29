@@ -21,3 +21,7 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+---
+
+A second project, **TradeSmart Advisory**, lives in [`advisory/`](advisory/README.md).
