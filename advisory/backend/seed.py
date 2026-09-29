@@ -1,42 +1,42 @@
-"""Dummy recommendations for testing. None of this is research or advice.
+"""Sample calls replayed over the last 12 months. None of this is research or advice.
 
-Levels are stored as % offsets from the entry price. At first startup the entry is
-set to the live price when Yahoo is reachable (so target/stop loss make sense against
-today's market), otherwise to the dummy base price below.
+Each call is issued at the real closing price on its issue date (or the dummy
+history's price when Yahoo is unreachable), then the evaluator walks the actual
+daily candles forward to decide how it ended. The calls are samples; the outcomes
+are what the market (or the dummy history) actually did.
 """
 
+import random
 from datetime import date, timedelta
 
 from db import get_conn
-from market import get_prices
+from evaluator import evaluate
+from market import get_market
+from universe import UNIVERSE
 
-# symbol, name, sector, action, dummy base price, target %, stop-loss %, horizon, rationale
-SEED = [
-    ("RELIANCE", "Reliance Industries", "Energy", "BUY", 1420, 12, -6, "6 months", "Sample: retail and telecom segments driving earnings visibility."),
-    ("TCS", "Tata Consultancy Services", "IT", "BUY", 3150, 10, -5, "6 months", "Sample: steady deal wins and stable margins."),
-    ("HDFCBANK", "HDFC Bank", "Banking", "BUY", 980, 11, -5, "9 months", "Sample: loan growth recovering with stable asset quality."),
-    ("ICICIBANK", "ICICI Bank", "Banking", "BUY", 1410, 10, -5, "6 months", "Sample: consistent return ratios and deposit growth."),
-    ("INFY", "Infosys", "IT", "HOLD", 1520, 7, -6, "6 months", "Sample: guidance steady; wait for clearer demand trend."),
-    ("SBIN", "State Bank of India", "Banking", "BUY", 820, 14, -7, "12 months", "Sample: valuation comfort with improving credit costs."),
-    ("BHARTIARTL", "Bharti Airtel", "Telecom", "BUY", 1900, 12, -6, "9 months", "Sample: tariff actions supporting ARPU growth."),
-    ("ITC", "ITC", "FMCG", "HOLD", 410, 6, -5, "6 months", "Sample: defensive pick; limited near-term triggers."),
-    ("LT", "Larsen & Toubro", "Infrastructure", "BUY", 3600, 13, -6, "12 months", "Sample: strong order book across segments."),
-    ("HINDUNILVR", "Hindustan Unilever", "FMCG", "SELL", 2400, -8, 5, "3 months", "Sample: volume growth slowing; margin pressure."),
-    ("KOTAKBANK", "Kotak Mahindra Bank", "Banking", "BUY", 2050, 10, -5, "9 months", "Sample: balance sheet strength and improving growth."),
-    ("AXISBANK", "Axis Bank", "Banking", "BUY", 1150, 12, -6, "9 months", "Sample: integration benefits flowing into earnings."),
-    ("BAJFINANCE", "Bajaj Finance", "NBFC", "BUY", 900, 15, -7, "12 months", "Sample: AUM growth with diversified product mix."),
-    ("MARUTI", "Maruti Suzuki", "Auto", "BUY", 12500, 11, -5, "9 months", "Sample: new launches and export momentum."),
-    ("SUNPHARMA", "Sun Pharmaceutical", "Pharma", "BUY", 1700, 10, -5, "6 months", "Sample: specialty portfolio scaling in the US."),
-    ("TITAN", "Titan Company", "Consumer", "HOLD", 3400, 6, -5, "6 months", "Sample: quality franchise, valuation already rich."),
-    ("ASIANPAINT", "Asian Paints", "Consumer", "SELL", 2350, -9, 5, "3 months", "Sample: rising competition in decorative paints."),
-    ("ULTRACEMCO", "UltraTech Cement", "Cement", "BUY", 11800, 12, -6, "12 months", "Sample: capacity additions and pricing discipline."),
-    ("NTPC", "NTPC", "Power", "BUY", 340, 14, -7, "12 months", "Sample: renewable capacity pipeline adds growth."),
-    ("POWERGRID", "Power Grid Corporation", "Power", "HOLD", 295, 6, -5, "6 months", "Sample: stable dividends; limited upside from here."),
-    ("TATASTEEL", "Tata Steel", "Metals", "SELL", 150, -10, 6, "3 months", "Sample: weak global steel prices weigh on margins."),
-    ("M&M", "Mahindra & Mahindra", "Auto", "BUY", 3150, 13, -6, "9 months", "Sample: SUV and tractor demand remain strong."),
-    ("HCLTECH", "HCL Technologies", "IT", "BUY", 1550, 10, -5, "6 months", "Sample: services growth leading large-cap IT peers."),
-    ("WIPRO", "Wipro", "IT", "SELL", 250, -8, 5, "3 months", "Sample: revenue growth lagging peers."),
-]
+RATIONALES = {
+    "BUY": [
+        "Sample: breakout above a multi-week range with rising volumes.",
+        "Sample: earnings momentum and improving margins.",
+        "Sample: sector tailwinds with valuation below its 5-year average.",
+        "Sample: strong order book gives earnings visibility.",
+        "Sample: price holding above its 200-day average after a pullback.",
+    ],
+    "SELL": [
+        "Sample: breakdown below support with weak volumes on up days.",
+        "Sample: margin pressure and slowing volume growth.",
+        "Sample: valuation stretched versus peers amid earnings downgrades.",
+    ],
+    "HOLD": [
+        "Sample: fundamentals intact, but limited near-term triggers.",
+        "Sample: quality franchise; wait for a better entry to add.",
+    ],
+}
+LEVELS = {  # (target % range, stop-loss % range, horizons in days)
+    "BUY": ((8, 16), (4, 7), [60, 90, 180]),
+    "SELL": ((6, 11), (4, 6), [30, 60]),
+    "HOLD": ((5, 8), (4, 6), [90, 180]),
+}
 
 
 def tick(x: float) -> float:
@@ -44,19 +44,52 @@ def tick(x: float) -> float:
     return round(round(x * 20) / 20, 2)
 
 
+def _bar_on_or_before(bars: list[dict], day: str) -> dict | None:
+    eligible = [b for b in bars if b["date"] <= day]
+    return eligible[-1] if eligible else None
+
+
 def seed_if_empty() -> None:
     with get_conn() as conn:
         if conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()[0]:
             return
-        prices, _ = get_prices({s[0]: s[4] for s in SEED})
+
+        market, _ = get_market()
+        rng = random.Random(2026)
         today = date.today()
-        for i, (sym, name, sector, action, base, tgt_pct, sl_pct, horizon, why) in enumerate(SEED):
-            entry = tick(prices[sym]["prev_close"])
+        # ~40 older calls spread over a year, ~22 recent ones (most of these are still open).
+        offsets = [round(360 - i * 300 / 39) for i in range(40)] + [round(58 - i * 56 / 21) for i in range(22)]
+        busy_until: dict[str, str] = {}  # one live call per stock at a time
+
+        for offset in offsets:
+            day = (today - timedelta(days=offset)).isoformat()
+            free = [s for s in UNIVERSE if busy_until.get(s, "") < day]
+            if not free:
+                continue
+            symbol = rng.choice(free)
+            bar = _bar_on_or_before(market[symbol], day)
+            if bar is None:
+                continue
+
+            action = rng.choices(["BUY", "SELL", "HOLD"], weights=[75, 15, 10])[0]
+            (t_lo, t_hi), (s_lo, s_hi), horizons = LEVELS[action]
+            t_pct, s_pct = rng.uniform(t_lo, t_hi) / 100, rng.uniform(s_lo, s_hi) / 100
+            entry = tick(bar["close"])
+            if action == "SELL":
+                target, stop = tick(entry * (1 - t_pct)), tick(entry * (1 + s_pct))
+            else:
+                target, stop = tick(entry * (1 + t_pct)), tick(entry * (1 - s_pct))
+
+            call = {"symbol": symbol, "action": action, "entry": entry, "target": target, "stop_loss": stop,
+                    "horizon_days": rng.choice(horizons), "rationale": rng.choice(RATIONALES[action]),
+                    "issued_on": bar["date"]}
+            status, exit_price, closed_on = evaluate(call, market[symbol])
+            busy_until[symbol] = closed_on or "9999-12-31"
             conn.execute(
                 """INSERT INTO recommendations
-                   (symbol, name, sector, action, entry, target, stop_loss, horizon, rationale, issued_on)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sym, name, sector, action, entry,
-                 tick(entry * (1 + tgt_pct / 100)), tick(entry * (1 + sl_pct / 100)),
-                 horizon, why, (today - timedelta(days=i)).isoformat()),
+                   (symbol, action, entry, target, stop_loss, horizon_days, rationale, issued_on,
+                    status, exit_price, closed_on)
+                   VALUES (:symbol, :action, :entry, :target, :stop_loss, :horizon_days, :rationale,
+                           :issued_on, :status, :exit_price, :closed_on)""",
+                {**call, "status": status, "exit_price": exit_price, "closed_on": closed_on},
             )

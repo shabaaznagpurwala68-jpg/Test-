@@ -21,7 +21,9 @@
       </div>
       <nav class="tabs" role="tablist">
         <button class="tab active" data-view="recs" role="tab">RECOMMENDATIONS</button>
+        <button class="tab" data-view="track" role="tab">TRACK RECORD</button>
         <button class="tab" data-view="news" role="tab">NEWS</button>
+        <button class="tab" data-view="risk" role="tab">MY RISK PROFILE</button>
       </nav>
       <div id="source" class="source"></div>
     </header>
@@ -33,8 +35,7 @@
       </div>
 
       <section id="view-recs">
-        <div id="summary" class="summary"></div>
-
+        <div id="rec-summary" class="summary"></div>
         <div class="controls">
           <div class="chips" id="filters">
             <button class="chip selected" data-action="">ALL</button>
@@ -42,29 +43,31 @@
             <button class="chip" data-action="SELL">SELL</button>
             <button class="chip" data-action="HOLD">HOLD</button>
           </div>
+          <label id="suited-toggle" class="toggle" hidden>
+            <input type="checkbox" id="suited-only" /> <span>Suited to me only</span>
+          </label>
           <input id="search" class="search" type="search" placeholder="Search stock or sector" />
         </div>
-
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Stock</th><th>Call</th><th class="num">Entry</th><th class="num">CMP</th>
+                <th>Stock</th><th>Call</th><th>Risk</th><th class="num">Entry</th><th class="num">CMP</th>
                 <th class="num">Target</th><th class="num">Stop loss</th><th class="num">Potential</th>
-                <th>SL → Target</th><th>Status</th>
+                <th>SL → Target</th><th>Issued</th>
               </tr>
             </thead>
-            <tbody id="rows"></tbody>
+            <tbody id="rec-rows"></tbody>
           </table>
         </div>
       </section>
 
-      <section id="view-news" hidden>
-        <ul id="news" class="news"></ul>
-      </section>
+      <section id="view-track" hidden></section>
+      <section id="view-news" hidden></section>
+      <section id="view-risk" hidden></section>
     </main>
 
-    <aside id="drawer" class="drawer" aria-hidden="true">
+    <aside id="drawer" class="drawer" aria-hidden="true" role="dialog" aria-label="Call details">
       <button id="drawer-close" class="drawer-close" aria-label="Close">×</button>
       <div id="drawer-body"></div>
     </aside>
@@ -73,8 +76,9 @@
     <footer class="footer">
       <p>www.tradesmartonline.in l +91 022-61208000</p>
       <p>Disclaimer: The securities are quoted as an example and not as a recommendation. Sample data for testing only.</p>
+      <p>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a> Lightweight Charts.</p>
     </footer>
 
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
