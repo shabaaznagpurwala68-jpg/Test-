@@ -1,13 +1,15 @@
 import { sparkline } from "./charts.js";
 import { openInstrument } from "./drawer.js";
 import { renderSource } from "./technical.js";
-import { $, api, badge, el, pct, tone } from "./util.js";
+import { $, api, badge, card, el, pct, tone } from "./util.js";
 
 const num = (v) => v.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const orDash = (v, f = pct) => (v == null ? "–" : f(v));
 let sort = { key: "chg_1d", dir: -1 };
 let query = "";
 let data = null;
+let funds = null;
+let vsort = { key: "mcap_cr", dir: -1 };
 
 function indexCard(x) {
   return el("button", { class: "mkt-card", onclick: () => openInstrument(x) },
@@ -105,8 +107,61 @@ function stockTable() {
     ))));
 }
 
+const VCOLS = [
+  ["symbol", "Stock"], ["mcap_cr", "Mkt cap (₹ Cr)"], ["pe", "PE"], ["pb", "PB"], ["eps", "EPS"], ["roe", "ROE"],
+  ["roce", "ROCE"], ["de", "D/E"], ["div_yield", "Div yield"], ["eps_cagr3", "EPS CAGR 3Y"], ["promoter", "Promoter"],
+];
+
+function valuationTable() {
+  const rows = [...funds.items].sort((a, b) => {
+    const x = a[vsort.key], y = b[vsort.key];
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * vsort.dir;
+  });
+  const f = (v, suffix = "") => (v == null ? "–" : `${v}${suffix}`);
+  return el("table", {},
+    el("thead", {}, el("tr", {}, VCOLS.map(([k, label], idx) =>
+      el("th", { class: idx ? "num" : "", "aria-sort": vsort.key === k ? (vsort.dir > 0 ? "ascending" : "descending") : "none" },
+        el("button", { class: "th-sort", onclick: () => {
+          vsort = { key: k, dir: vsort.key === k ? -vsort.dir : k === "symbol" ? 1 : -1 };
+          $("valuation-table").replaceChildren(valuationTable());
+        } }, label, vsort.key === k ? (vsort.dir > 0 ? " ▲" : " ▼") : ""))))),
+    el("tbody", {}, rows.map((s) => el("tr", {},
+      el("td", {}, el("div", { class: "sym" }, s.symbol), el("div", { class: "sub" }, s.peer_group)),
+      el("td", { class: "num" }, s.mcap_cr.toLocaleString("en-IN")),
+      el("td", { class: "num" }, f(s.pe, "×")),
+      el("td", { class: "num" }, f(s.pb, "×")),
+      el("td", { class: "num" }, s.eps.toLocaleString("en-IN", { maximumFractionDigits: 2 })),
+      el("td", { class: "num" }, f(s.roe, "%")),
+      el("td", { class: "num" }, f(s.roce, "%")),
+      el("td", { class: "num" }, f(s.de)),
+      el("td", { class: "num" }, f(s.div_yield, "%")),
+      el("td", { class: `num ${tone(s.eps_cagr3 ?? 0)}` }, f(s.eps_cagr3, "%")),
+      el("td", { class: "num" }, s.promoter ? `${s.promoter}%` : "None")))));
+}
+
+function valuationSection() {
+  const a = funds.aggregate;
+  return [
+    el("div", { class: "panel-head section-title" }, el("h3", {}, "Valuation ratios"),
+      el("span", { class: "sub" }, "PE, PB and yield use live prices; the underlying fundamentals are sample values")),
+    el("div", { class: "summary" },
+      card("Aggregate PE · our 50", `${a.pe}×`, "", "Total market cap ÷ total earnings"),
+      card("Aggregate PB", `${a.pb}×`, "", "Total market cap ÷ total book value"),
+      card("Dividend yield", `${a.div_yield}%`, "", "Total dividends ÷ total market cap"),
+      card("Combined market cap", `₹${(a.mcap_cr / 100000).toFixed(1)} lakh Cr`, "", "Official Nifty PE uses free-float weights")),
+    el("div", { class: "table-wrap" }, el("table", { class: "compact" },
+      el("thead", {}, el("tr", {}, ["Peer group", "Stocks", "Median PE", "Median PB", "Median ROE"].map((h, i) => el("th", { class: i ? "num" : "" }, h)))),
+      el("tbody", {}, funds.peer_groups.map((g) => el("tr", {},
+        el("td", {}, g.group), el("td", { class: "num" }, String(g.stocks)), el("td", { class: "num" }, `${g.median_pe}×`),
+        el("td", { class: "num" }, `${g.median_pb}×`), el("td", { class: "num" }, `${g.median_roe}%`)))))),
+    el("div", { class: "table-wrap", id: "valuation-table", style: "margin-top:12px" }, valuationTable()),
+  ];
+}
+
 export async function renderMarkets() {
-  data = await api("/markets");
+  [data, funds] = await Promise.all([api("/markets"), api("/fundamentals")]);
   renderSource(data.price_source, data.as_of);
   const group = (g) => data.indices.filter((x) => x.group === g).map(indexCard);
   $("view-markets").replaceChildren(
@@ -126,7 +181,7 @@ export async function renderMarkets() {
         oninput: (e) => { query = e.target.value; $("stock-table").replaceChildren(stockTable()); },
       })),
     el("div", { class: "table-wrap", id: "stock-table" }, stockTable()),
-    el("p", { class: "note" }, "Trend: Uptrend = price above 50-DMA above 200-DMA; Downtrend = the reverse; otherwise Sideways. "
-      + "Valuation ratios such as PE, PB and ROE arrive with the Fundamental section (Phase 2)."),
+    el("p", { class: "note" }, "Trend: Uptrend = price above 50-DMA above 200-DMA; Downtrend = the reverse; otherwise Sideways."),
+    ...valuationSection(),
   );
 }

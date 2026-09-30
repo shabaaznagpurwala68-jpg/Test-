@@ -1,7 +1,8 @@
 # TradeSmart Advisory (test build)
 
-Client-facing advisory demo: rule-based technical picks with their reasoning, a markets dashboard,
-a 12-month track record of the method, market news tagged by stock, and client risk profiling.
+Client-facing advisory demo: fundamental and technical picks with the reasoning behind each, a markets
+dashboard with valuation ratios, a 12-month track record of the technical method, market news tagged by
+stock, and client risk profiling.
 **Sample build.** Disclaimer: The securities are quoted as an example and not as a recommendation.
 
 Everything here is free: prices from Yahoo Finance via `yfinance`, news from public RSS feeds,
@@ -11,15 +12,16 @@ charts from TradingView Lightweight Charts (Apache-2.0), fonts and logo from the
 
 | Tab | What it does |
 |---|---|
+| **Fundamental** | A 100-point scorecard for all 50 stocks: Valuation (PE and PB vs peer median, PEG), Quality (ROE, ROCE, D/E; ROE and ROA for financials), Growth (3-yr revenue and EPS CAGR), Shareholder (dividend yield, promoter holding, pledge). PICK = score ≥ 75 and ≥ 15% below fair value. Each stock shows its full scorecard, fair-value maths and peer group. **Fundamentals are sample values**; PE, PB, yield and market cap use the live price. |
 | **Technical** | Three setups (Trend Breakout, MACD Momentum, Oversold Bounce) scan 50 stocks (≈ Nifty 50) after each close. A call is issued only when every rule passes. Each call shows its checklist ("why this stock"), the formula behind its levels, and a chart with 20/50/200-DMA, RSI and MACD. |
-| **Markets** | Indian and global indices, USD/INR, crude, gold, US 10Y, Dollar Index; breadth; 9 scanners; a sortable stock screener. |
+| **Markets** | Indian and global indices, USD/INR, crude, gold, US 10Y, Dollar Index; breadth; 9 scanners; a sortable stock screener; valuation ratios (aggregate PE/PB/yield of the 50, peer-group medians, and PE, PB, EPS, ROE, ROCE, D/E, yield, growth, promoter holding per stock). |
 | **Track record** | The same setups replayed over the last 12 months: win rate, P&L on ₹1 lakh per call after ₹15 × 2 brokerage, equity curve, results by setup and sector. |
 | **News** | ET / Moneycontrol / Livemint headlines (headline + link only), tagged by stock. |
 | **My risk profile** | 7-question quiz → Conservative / Moderate / Aggressive; calls are marked suited or not. |
 
-**Levels:** entry = close; stop loss = entry − 2 × ATR(14); target = entry + 2 × risk (1:2); 60-day limit.
-**Coming in Phase 2:** the Fundamental tab (scorecard on valuation, quality, growth, shareholder factors)
-and valuation ratios (PE, PB, ROE…) in Markets.
+**Technical levels:** entry = close; stop loss = entry − 2 × ATR(14); target = entry + 2 × risk (1:2); 60-day limit.
+**Fundamental levels:** fair value = forward EPS × blended PE (½ peer median + ½ own PE), forward EPS growth capped
+at 15%; target = fair value capped at +30%; stop loss 15%; 12 months. Trade levels are shown for picks only.
 
 Runs on its own ports, so it can run alongside the watchlist: backend **8001**, frontend **5180**.
 
@@ -56,6 +58,7 @@ Open http://localhost:5180. The top-right badge shows whether prices are LIVE or
 
 ## API
 
+- `GET /api/fundamentals`, `GET /api/fundamentals/{symbol}` — scorecards, fair value, peers
 - `GET /api/setups` — setup definitions + 12-month stats
 - `GET /api/calls?status=open|closed|all&setup=TREND_BREAKOUT|MACD_MOMENTUM|OVERSOLD_BOUNCE`
 - `GET /api/calls/{id}`, `/api/calls/{id}/chart`, `/api/calls/{id}/explain`

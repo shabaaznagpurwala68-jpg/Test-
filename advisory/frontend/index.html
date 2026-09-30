@@ -17,7 +17,8 @@
         <span class="product">Advisory</span>
       </div>
       <nav class="tabs" role="tablist">
-        <button class="tab active" data-view="technical" role="tab">TECHNICAL</button>
+        <button class="tab active" data-view="fundamental" role="tab">FUNDAMENTAL</button>
+        <button class="tab" data-view="technical" role="tab">TECHNICAL</button>
         <button class="tab" data-view="markets" role="tab">MARKETS</button>
         <button class="tab" data-view="track" role="tab">TRACK RECORD</button>
         <button class="tab" data-view="news" role="tab">NEWS</button>
@@ -32,7 +33,9 @@
         <p><strong>Test build with sample data.</strong> Disclaimer: The securities are quoted as an example and not as a recommendation.</p>
       </div>
 
-      <section id="view-technical">
+      <section id="view-fundamental"></section>
+
+      <section id="view-technical" hidden>
         <div class="intro">
           <h2>Technical picks</h2>
           <p class="sub">Three rule-based setups scan all 50 stocks after every market close. A call is issued only when

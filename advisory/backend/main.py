@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from db import get_conn, init_db
 from explain import explain
+from fundamentals import (PICK_SCORE, PICK_UPSIDE, STOP_LOSS_PCT, TARGET_CAP, evaluate_all as evaluate_fundamentals,
+                          narrative)
 from indicators import annual_volatility, compute
 from market import get_market, quote
 from markets import dashboard
@@ -188,6 +190,49 @@ def markets():
     market, source, indicators = _state()
     return {**dashboard(market, indicators), "price_source": source,
             "as_of": datetime.now(timezone.utc).isoformat()}
+
+
+FUNDAMENTAL_METHOD = {
+    "pillars": [
+        {"name": "Valuation", "points": 25, "factors": ["PE vs peer-group median (10)", "PB vs peer-group median (7)", "PEG — PE ÷ EPS growth (8)"]},
+        {"name": "Quality", "points": 25, "factors": ["ROE (9)", "ROCE (8)", "Debt / equity (8)", "Financials: ROE (13) + ROA (12) instead"]},
+        {"name": "Growth", "points": 25, "factors": ["3-year revenue CAGR (12)", "3-year EPS CAGR (13)"]},
+        {"name": "Shareholder", "points": 25, "factors": ["Dividend yield (8)", "Promoter holding (8)", "Promoter pledge (9)"]},
+    ],
+    "fair_value": "Forward EPS × blended PE. Forward EPS = EPS × (1 + EPS growth, capped at 15%). "
+                  "Blended PE = ½ peer-group median PE + ½ the stock's own PE.",
+    "rules": [f"PICK: score ≥ {PICK_SCORE} and fair value ≥ {PICK_UPSIDE}% above the price",
+              f"WATCH: score ≥ {PICK_SCORE}, but less than {PICK_UPSIDE}% upside",
+              f"NEUTRAL: score 50 – {PICK_SCORE - 1}", "WEAK: score below 50"],
+    "levels": {"target": f"Fair value, capped at +{TARGET_CAP}% for a 12-month view",
+               "stop_loss": f"{STOP_LOSS_PCT}% below the current price, reviewed quarterly", "horizon": "12 months"},
+    "data_note": "Fundamentals (EPS, ROE, growth, holdings…) are SAMPLE values for demonstration. "
+                 "PE, PB, dividend yield and market cap use the live price.",
+}
+
+
+@app.get("/api/fundamentals")
+def fundamentals():
+    market, source, _ = _state()
+    result = evaluate_fundamentals(market)
+    for it in result["items"]:
+        it.pop("factors")
+    return {**result, "method": FUNDAMENTAL_METHOD, "price_source": source,
+            "as_of": datetime.now(timezone.utc).isoformat()}
+
+
+@app.get("/api/fundamentals/{symbol}")
+def fundamental_detail(symbol: str):
+    market, source, _ = _state()
+    result = evaluate_fundamentals(market)
+    item = next((i for i in result["items"] if i["symbol"] == symbol), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="unknown stock")
+    group = next(g for g in result["peer_groups"] if g["group"] == item["peer_group"])
+    peers = [{k: i[k] for k in ("symbol", "pe", "pb", "roe", "score", "verdict")}
+             for i in result["items"] if i["peer_group"] == item["peer_group"]]
+    return {**item, "narrative": narrative(item), "peer": group, "peers": peers, "method": FUNDAMENTAL_METHOD,
+            "price_source": source}
 
 
 @app.get("/api/news")

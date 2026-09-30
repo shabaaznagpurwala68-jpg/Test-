@@ -280,6 +280,46 @@ table.compact { min-width: 0; }
 .formula > div:last-child { border-bottom: 0; }
 .formula span:first-child { color: var(--ts-gray-600); }
 
+/* Fundamental */
+.seg-0 { background: var(--ts-blue); }
+.seg-1 { background: var(--ts-navy); }
+.seg-2 { background: var(--ts-yellow); }
+.seg-3 { background: var(--ts-blue-40); }
+.scorebar-wrap { display: flex; align-items: center; gap: var(--ts-space-2); min-width: 150px; }
+.score-num { font-size: 16px; color: var(--text-primary); width: 24px; font-variant-numeric: tabular-nums; }
+.pillar-bar { flex: 1; height: 8px; border-radius: var(--ts-radius-pill); background: var(--ts-gray-100); display: flex; overflow: hidden; }
+.pillar-bar .seg { height: 100%; }
+.verdict-PICK { background: var(--ts-blue); color: var(--ts-white); }
+.verdict-WATCH { background: var(--ts-yellow-10); color: #8A5410; border: 1px solid var(--ts-yellow); }
+.verdict-NEUTRAL { background: var(--ts-gray-100); color: var(--ts-gray-600); }
+.verdict-WEAK { background: var(--ts-white); color: var(--ts-gray-600); border: 1px solid var(--ts-gray-200); }
+.method summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; list-style: none; }
+.method summary::-webkit-details-marker { display: none; }
+.method[open] summary { margin-bottom: var(--ts-space-3); }
+.pillar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--ts-space-3); }
+.pillar { background: var(--ts-gray-50); border-radius: var(--ts-radius-sm); padding: var(--ts-space-3); }
+.pillar-head { display: flex; align-items: center; gap: var(--ts-space-2); }
+.pillar-head .sub { margin-left: auto; }
+.pillar ul { margin: var(--ts-space-2) 0 0; padding-left: 18px; font-size: var(--ts-text-sm); line-height: 1.5; }
+.dot-seg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.method-rows { margin-top: var(--ts-space-3); border-top: 1px solid var(--ts-hairline); }
+.method-rows > div { display: grid; grid-template-columns: 110px 1fr; gap: var(--ts-space-3); padding: var(--ts-space-2) 0; border-bottom: 1px solid var(--ts-hairline); font-size: var(--ts-label); line-height: 1.45; }
+.method-rows span:first-child { color: var(--ts-gray-600); }
+.data-note { background: var(--ts-yellow-10); border-radius: var(--ts-radius-sm); padding: var(--ts-space-2) var(--ts-space-3); font-size: var(--ts-text-sm); margin: var(--ts-space-3) 0 0; }
+.pillar-block { margin-bottom: var(--ts-space-3); }
+.pillar-title { display: flex; align-items: center; gap: var(--ts-space-2); margin-bottom: var(--ts-space-2); }
+.pillar-pts { margin-left: auto; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.factor { display: grid; grid-template-columns: 1fr auto 88px; gap: var(--ts-space-3); align-items: center; padding: var(--ts-space-3); border-bottom: 1px solid var(--ts-hairline); }
+.factor:last-child { border-bottom: 0; }
+.factor-pts { font-size: var(--ts-text-sm); text-align: right; font-variant-numeric: tabular-nums; }
+.mini-bar { height: 6px; background: var(--ts-gray-100); border-radius: var(--ts-radius-pill); overflow: hidden; margin-bottom: 2px; }
+.mini-bar span { display: block; height: 100%; background: var(--ts-blue); }
+.note-inline { font-style: italic; }
+.formula-wide > div { grid-template-columns: 110px 1fr auto; }
+tr.current td { background: var(--ts-blue-10); }
+tfoot td { font-weight: 700; border-top: 1px solid var(--ts-hairline); border-bottom: 0; }
+#valuation-table table { min-width: 980px; }
+
 /* Markets */
 .mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--ts-space-3); margin-bottom: var(--ts-space-2); }
 .mkt-card {
@@ -322,11 +362,16 @@ table.compact { min-width: 0; }
 
 @media (max-width: 900px) {
   .setup-cards { grid-template-columns: 1fr; }
+  .pillar-grid { grid-template-columns: 1fr 1fr; }
   .breadth { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 720px) {
   .breadth { grid-template-columns: 1fr; }
+  .pillar-grid { grid-template-columns: 1fr; }
+  .factor { grid-template-columns: 1fr auto; }
+  .factor-pts { grid-column: 1 / -1; text-align: left; }
+  .method-rows > div { grid-template-columns: 1fr; gap: 2px; }
   .chart-tall { height: 380px; }
   .summary-6 { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }

@@ -1,4 +1,5 @@
 import { closeDrawer } from "./drawer.js";
+import { renderFundamental, rerenderFundamental } from "./fundamental.js";
 import { renderMarkets } from "./markets.js";
 import { renderNews } from "./news.js";
 import { onProfileChange, renderRisk } from "./risk.js";
@@ -7,6 +8,7 @@ import { renderTrack } from "./track.js";
 import { $ } from "./util.js";
 
 const views = {
+  fundamental: renderFundamental,
   technical: loadTechnical,
   markets: renderMarkets,
   track: renderTrack,
@@ -35,11 +37,14 @@ $("suited-only").onchange = (e) => {
   techState.suitedOnly = e.target.checked;
   renderTechnical();
 };
-onProfileChange(() => renderTechnical());
+onProfileChange(() => {
+  renderTechnical();
+  rerenderFundamental();
+});
 
 $("drawer-close").onclick = closeDrawer;
 $("scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => e.key === "Escape" && closeDrawer());
 
-loadTechnical();
+renderFundamental();
 setInterval(() => !$("view-technical").hidden && loadTechnical(), 60000); // backend caches prices for 5 min

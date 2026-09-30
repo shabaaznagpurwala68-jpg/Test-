@@ -153,3 +153,82 @@ export function openInstrument(row, extras = {}) {
   drawChart(chartBox, `/chart/${encodeURIComponent(row.symbol || row.key)}?days=240`);
   if (isStock) newsFor(row.symbol, newsBox);
 }
+
+const PILLARS = ["Valuation", "Quality", "Growth", "Shareholder"];
+
+/** A fundamental pick: pillar-by-pillar scorecard, fair value maths, peers and a price chart. */
+export async function openFundamental(symbol) {
+  const d = await api(`/fundamentals/${encodeURIComponent(symbol)}`);
+  const profile = getProfile();
+  const chartBox = el("div", { class: "chart chart-tall" });
+  const newsBox = el("div", {}, el("div", { class: "sub" }, "Loading news…"));
+  const capped = d.fair_value && d.fair_value_uncapped > d.fair_value + 0.01;
+  const growth = Math.min(Math.max(d.eps_cagr3 ?? 0, 0), 15);
+  const fwdEps = d.eps * (1 + growth / 100);
+  const blended = d.pe != null ? (d.peer.median_pe + d.pe) / 2 : null;
+
+  show([
+    el("div", { class: "badges" },
+      badge(d.verdict, `verdict-${d.verdict}`),
+      badge(`SCORE ${d.score.toFixed(0)}/100`, "setup"),
+      badge(`${d.risk_level.toUpperCase()} RISK`, `risk-${d.risk_level}`),
+      profile && !isSuited(d, profile) && badge("NOT SUITED TO YOUR PROFILE", "unsuited")),
+    el("h2", {}, d.name),
+    el("div", { class: "sub" }, `${d.symbol} · NSE · ${d.sector} · peer group: ${d.peer_group}`),
+    el("div", { class: "price" }, inr(d.cmp)),
+    el("div", { class: tone(d.change_pct) }, `${pct(d.change_pct)} today`),
+    el("div", { class: "levels" },
+      lvl(d.verdict === "PICK" ? "Fair value (target)" : "Fair value", d.fair_value ? inr(d.fair_value) : "n/m"),
+      lvl("Upside", d.upside_pct == null ? "–" : pct(d.upside_pct), tone(d.upside_pct)),
+      // Trade levels only for picks: a stop loss on a stock we don't recommend would imply a trade.
+      d.verdict === "PICK" ? lvl("Stop loss (−15%)", inr(d.stop_loss)) : lvl("Trade levels", "Picks only")),
+
+    el("h3", {}, "Why this stock"),
+    el("div", { class: "explain" }, d.narrative.map((p) => el("p", {}, p))),
+
+    el("h3", {}, "Scorecard"),
+    PILLARS.map((p, i) => el("div", { class: "pillar-block" },
+      el("div", { class: "pillar-title" }, el("i", { class: `dot-seg seg-${i}` }), el("strong", {}, p),
+        el("span", { class: "pillar-pts" }, `${d.pillars[p].toFixed(1)} / 25`)),
+      el("div", { class: "checklist" }, d.factors.filter((f) => f.pillar === p).map((f) =>
+        el("div", { class: "factor" },
+          el("div", {}, el("div", { class: "check-label" }, f.label),
+            el("div", { class: "sub" }, f.benchmark), f.note && el("div", { class: "sub note-inline" }, f.note)),
+          el("div", { class: "check-value" }, f.value),
+          el("div", { class: "factor-pts" },
+            el("div", { class: "mini-bar" }, el("span", { style: `width:${(f.points / f.max) * 100}%` })),
+            el("span", {}, `${(+f.points).toFixed(1)}/${f.max}`))))))),
+
+    el("h3", {}, "How the fair value is calculated"),
+    d.fair_value
+      ? el("div", { class: "formula formula-wide" },
+          el("div", {}, el("span", {}, "EPS (trailing)"), el("span", {}, "Sample"), el("strong", {}, inr(d.eps))),
+          el("div", {}, el("span", {}, "Forward EPS"), el("span", {}, `${inr(d.eps)} × (1 + ${growth.toFixed(0)}% growth, max 15%)`), el("strong", {}, inr(fwdEps))),
+          el("div", {}, el("span", {}, "Blended PE"), el("span", {}, `½ × peer median ${d.peer.median_pe}× + ½ × own ${d.pe}×`), el("strong", {}, `${blended.toFixed(1)}×`)),
+          el("div", {}, el("span", {}, "Fair value"), el("span", {}, `${inr(fwdEps)} × ${blended.toFixed(1)}×${capped ? ` = ${inr(d.fair_value_uncapped)}, capped at +30%` : ""}`), el("strong", {}, inr(d.fair_value))))
+      : el("p", { class: "sub" }, "Not meaningful: earnings are too small relative to the price (PE above 150×)."),
+
+    el("h3", {}, `Peer group: ${d.peer_group}`),
+    el("div", { class: "table-wrap" }, el("table", { class: "compact" },
+      el("thead", {}, el("tr", {}, ["Stock", "PE", "PB", "ROE", "Score", "Verdict"].map((h, i) => el("th", { class: i && i < 5 ? "num" : "" }, h)))),
+      el("tbody", {}, d.peers.map((p) => el("tr", { class: p.symbol === d.symbol ? "current" : "" },
+        el("td", { class: "sym" }, p.symbol),
+        el("td", { class: "num" }, p.pe == null ? "–" : `${p.pe}×`),
+        el("td", { class: "num" }, `${p.pb}×`),
+        el("td", { class: "num" }, `${p.roe}%`),
+        el("td", { class: "num" }, p.score.toFixed(0)),
+        el("td", {}, badge(p.verdict, `verdict-${p.verdict}`))))),
+      el("tfoot", {}, el("tr", {}, el("td", {}, "Median"), el("td", { class: "num" }, `${d.peer.median_pe}×`),
+        el("td", { class: "num" }, `${d.peer.median_pb}×`), el("td", { class: "num" }, `${d.peer.median_roe}%`), el("td", {}), el("td", {}))))),
+
+    el("h3", {}, "Price chart"),
+    legend(),
+    chartBox,
+    el("h3", {}, `News on ${d.symbol}`),
+    newsBox,
+    el("p", { class: "data-note" }, el("strong", {}, "Sample data. "), d.method.data_note),
+    el("p", { class: "sub" }, "Disclaimer: The securities are quoted as an example and not as a recommendation."),
+  ]);
+  drawChart(chartBox, `/chart/${encodeURIComponent(symbol)}?days=365`);
+  newsFor(symbol, newsBox);
+}
