@@ -1,69 +1,66 @@
-"""Plain-language explanation of a call, built from its own numbers.
+"""Plain-language explanation of a technical call, built from its own numbers.
 
-Rule-based, not AI: the same call always gets the same explanation, and it can
-only restate what the call already says — it never adds a view of its own.
+Rule-based, not AI: the same call always gets the same explanation, and it only
+restates what the call's checklist and levels already say.
 """
 
 import math
 from datetime import date
 
-
-def _inr(x: float) -> str:
-    s = f"{x:,.2f}"
-    whole, frac = s.split(".")
-    digits = whole.replace(",", "")
-    if len(digits) > 3:  # Indian grouping: 1,00,000
-        head, tail = digits[:-3], digits[-3:]
-        head = ",".join([head[max(i - 2, 0):i] for i in range(len(head), 0, -2)][::-1])
-        whole = f"{head},{tail}"
-    return f"₹{whole}.{frac}"
+from fmt import inr
+from technical import ATR_MULTIPLE, REWARD_MULTIPLE, SETUPS
 
 
-def explain(c: dict) -> list[str]:
-    name, horizon = c["name"], c["horizon"]
+def _why(setup: str, v: dict) -> str:
+    if setup == "TREND_BREAKOUT":
+        return (f"Why now: the price closed above its highest level of the previous 20 days while the 50-day "
+                f"average ({inr(v['sma50'], 0)}) was above the 200-day average ({inr(v['sma200'], 0)}) — the uptrend "
+                f"is intact. Volume was {v['vol_ratio']:.1f}× normal, a sign of real buying interest, and RSI of "
+                f"{v['rsi']:.0f} shows momentum without being overbought (above 70–75).")
+    if setup == "MACD_MOMENTUM":
+        return (f"Why now: MACD ({v['macd']:.2f}) crossed above its signal line ({v['macd_signal']:.2f}), which means "
+                f"the short-term average started rising faster than the longer one — momentum turning up. The price "
+                f"is above its 200-day average ({inr(v['sma200'], 0)}), so this is in the direction of the long-term "
+                f"trend, and RSI of {v['rsi']:.0f} confirms buyers have the edge.")
+    return (f"Why now: RSI fell below 30 (oversold — the stock dropped fast) and has recovered to {v['rsi']:.0f}, "
+            f"suggesting selling pressure is easing. The price is still above its 200-day average "
+            f"({inr(v['sma200'], 0)}), so the long-term uptrend hasn't broken. Buying a dip is riskier than buying "
+            f"strength, which is why this setup is rated one risk level higher.")
+
+
+def explain(c: dict, setup_stats: dict | None) -> list[str]:
+    v = c["signal"]["values"]
     entry, tgt, sl = c["entry"], c["target"], c["stop_loss"]
-    reward_pct = abs(tgt - entry) / entry * 100
-    risk_pct = abs(entry - sl) / entry * 100
-    rr = abs(tgt - entry) / abs(entry - sl)
-    out = []
-
-    if c["action"] == "BUY":
-        out.append(f"This is a BUY call on {name}. It suggests buying near {_inr(entry)}, expecting the price "
-                   f"to rise to {_inr(tgt)} (about {reward_pct:.1f}% higher) within {horizon}.")
-        out.append(f"The stop loss at {_inr(sl)} is the exit point if the view turns out wrong. Exiting there "
-                   f"limits the loss to about {risk_pct:.1f}% of the amount invested.")
-    elif c["action"] == "SELL":
-        out.append(f"This is a SELL call on {name}. The view is that the price may fall from {_inr(entry)} to "
-                   f"{_inr(tgt)} (about {reward_pct:.1f}% lower) within {horizon}. If you hold the stock, it's "
-                   f"a signal to consider exiting; traders may take a short position through futures.")
-        out.append(f"The stop loss at {_inr(sl)} is above the entry: if the price rises there instead, the view "
-                   f"is wrong and a short position should be closed, limiting the loss to about {risk_pct:.1f}%.")
-    else:
-        out.append(f"This is a HOLD call on {name}. If you already own it, the view is to stay invested, with a "
-                   f"target of {_inr(tgt)} (about {reward_pct:.1f}% above {_inr(entry)}) within {horizon}. "
-                   f"It is not a signal to buy more.")
-        out.append(f"If the price falls to {_inr(sl)} (about {risk_pct:.1f}% below the entry), the stop loss "
-                   f"says exit to protect your capital.")
-
-    quality = "favourable" if rr >= 2 else "reasonable" if rr >= 1.5 else "thin"
-    out.append(f"For every ₹1 at risk, the potential reward is ₹{rr:.2f} (risk-reward 1:{rr:.1f}), "
-               f"which is {quality}.")
-
+    setup_name = SETUPS[c["setup"]]["name"]
+    reward_pct = (tgt - entry) / entry * 100
+    risk_pct = (entry - sl) / entry * 100
+    out = [
+        f"This is a BUY call on {c['name']} from our {setup_name} setup. It suggests buying near {inr(entry)}, "
+        f"with a target of {inr(tgt)} (about {reward_pct:.1f}% higher) within {c['horizon']}.",
+        _why(c["setup"], v),
+        f"How the stop loss is set: ATR — the stock's average daily range over 14 days — was {inr(v['atr'])}. "
+        f"The stop loss sits {ATR_MULTIPLE} × ATR below the entry at {inr(sl)} (about {risk_pct:.1f}%), so normal "
+        f"day-to-day noise shouldn't trigger it, but a real reversal will.",
+        f"How the target is set: {REWARD_MULTIPLE} × the risk above the entry, a fixed risk-reward of "
+        f"1:{REWARD_MULTIPLE}. At 1:{REWARD_MULTIPLE}, the method breaks even if about "
+        f"{100 / (1 + REWARD_MULTIPLE):.0f}% of calls hit their target (a bit more after charges).",
+    ]
+    if setup_stats and setup_stats["calls"]:
+        out.append(f"Track record of this setup over the last 12 months: {setup_stats['calls']} closed calls, "
+                   f"{setup_stats['win_rate']:.0f}% profitable, average {setup_stats['avg_return_pct']:+.2f}% per call.")
     daily = c["volatility"] / math.sqrt(252)
-    out.append(f"{name} has moved about {c['volatility']:.0f}% a year (annualised volatility), roughly "
-               f"{daily:.1f}% on a typical day. That puts this call in the {c['risk_level']} risk bucket.")
-
+    out.append(f"{c['name']} has moved about {c['volatility']:.0f}% a year, roughly {daily:.1f}% on a typical day. "
+               f"That puts this call in the {c['risk_level']} risk bucket.")
     qty = int(100_000 // entry)
     if qty:
-        out.append(f"Example: with ₹1,00,000 you could take {qty} shares. If the stop loss is hit, the loss "
-                   f"would be about {_inr(qty * abs(entry - sl))}; if the target is hit, the gain would be about "
-                   f"{_inr(qty * abs(tgt - entry))} (before brokerage and taxes).")
-
+        out.append(f"Example: with ₹1,00,000 you could buy {qty} shares. If the stop loss is hit, the loss would be "
+                   f"about {inr(qty * (entry - sl), 0)}; if the target is hit, the gain would be about "
+                   f"{inr(qty * (tgt - entry), 0)} (before brokerage and taxes).")
     if c["status"] == "OPEN":
-        out.append(f"Right now the price is {_inr(c['cmp'])}, {c['progress'] * 100:.0f}% of the way from the "
-                   f"stop loss to the target.")
+        out.append(f"Right now the price is {inr(c['cmp'])}, {c['progress'] * 100:.0f}% of the way from the stop "
+                   f"loss to the target.")
     else:
-        verb = {"TARGET_HIT": "hit its target", "SL_HIT": "hit its stop loss", "EXPIRED": "expired"}[c["status"]]
-        out.append(f"This call is closed: it {verb} on {date.fromisoformat(c['closed_on']):%d %b %Y}, exiting at {_inr(c['exit_price'])} "
-                   f"({c['return_pct']:+.2f}%).")
+        verb = {"TARGET_HIT": "hit its target", "SL_HIT": "hit its stop loss", "EXPIRED": "reached its time limit"}[c["status"]]
+        out.append(f"This call is closed: it {verb} on {date.fromisoformat(c['closed_on']):%d %b %Y}, exiting at "
+                   f"{inr(c['exit_price'])} ({c['return_pct']:+.2f}%).")
     return out

@@ -2,7 +2,7 @@
 
 Assumes ₹1,00,000 put into every call (whole shares only), and deducts TradeSmart
 brokerage of ₹15 per executed order — ₹30 per call (entry + exit). Taxes and
-statutory charges are not included. SELL calls are measured as short positions.
+statutory charges are not included.
 """
 
 from collections import defaultdict
@@ -53,10 +53,10 @@ def summarize(closed_calls: list[dict]) -> dict:
         peak = max(peak, v)
         max_dd = max(max_dd, peak - v)
 
-    by_sector, by_action = defaultdict(list), defaultdict(list)
+    by_sector, by_setup = defaultdict(list), defaultdict(list)
     for t in trades:
         by_sector[t["sector"]].append(t)
-        by_action[t["action"]].append(t)
+        by_setup[t["setup_name"]].append(t)
 
     return {
         "stats": {
@@ -75,6 +75,6 @@ def summarize(closed_calls: list[dict]) -> dict:
         "equity_curve": [{"time": d, "value": v} for d, v in curve.items()],
         "by_sector": sorted(({"sector": k, **_group_stats(v)} for k, v in by_sector.items()),
                             key=lambda g: -g["net_pnl"]),
-        "by_action": [{"action": k, **_group_stats(v)} for k, v in sorted(by_action.items())],
+        "by_setup": sorted(({"setup": k, **_group_stats(v)} for k, v in by_setup.items()), key=lambda g: -g["net_pnl"]),
         "closed_calls": sorted(trades, key=lambda t: (t["closed_on"], t["id"]), reverse=True),
     }

@@ -13,7 +13,7 @@ import re
 
 import feedparser
 
-from universe import UNIVERSE
+from universe import STOCKS as UNIVERSE
 
 FEEDS = [
     ("Economic Times", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),

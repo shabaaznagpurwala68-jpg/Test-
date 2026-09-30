@@ -1,5 +1,5 @@
 import { equityChart } from "./charts.js";
-import { openDrawer } from "./drawer.js";
+import { openCall } from "./drawer.js";
 import { $, STATUS, api, badge, card, day, el, inr, inr0, pct, tone } from "./util.js";
 
 let chart = null;
@@ -33,15 +33,15 @@ export async function renderTrack() {
       el("div", { class: "panel-head" }, el("h3", {}, "Equity curve"),
         el("span", { class: "sub" }, "Cumulative net P&L, ₹1,00,000 per call")),
       chartBox),
-    el("div", { class: "grid-2" }, groupTable("Call type", "action", d.by_action), groupTable("Sector", "sector", d.by_sector)),
+    el("div", { class: "grid-2" }, groupTable("Setup", "setup", d.by_setup), groupTable("Sector", "sector", d.by_sector)),
     el("h3", { class: "section-title" }, "Closed calls"),
     el("div", { class: "table-wrap" },
       el("table", {},
-        el("thead", {}, el("tr", {}, ["Stock", "Call", "Issued", "Closed", "Entry", "Exit", "Result", "Return", "Net P&L", "Days"]
+        el("thead", {}, el("tr", {}, ["Stock", "Setup", "Issued", "Closed", "Entry", "Exit", "Result", "Return", "Net P&L", "Days"]
           .map((h, i) => el("th", { class: i >= 4 && i !== 6 ? "num" : "" }, h)))),
-        el("tbody", {}, d.closed_calls.map((c) => el("tr", { tabindex: "0", onclick: () => openDrawer(c.id), onkeydown: (e) => e.key === "Enter" && openDrawer(c.id) },
+        el("tbody", {}, d.closed_calls.map((c) => el("tr", { tabindex: "0", onclick: () => openCall(c.id), onkeydown: (e) => e.key === "Enter" && openCall(c.id) },
           el("td", {}, el("div", { class: "sym" }, c.symbol)),
-          el("td", {}, badge(c.action, `call-${c.action}`)),
+          el("td", {}, badge(c.setup_name.toUpperCase(), "setup")),
           el("td", { class: "sub nowrap" }, day(c.issued_on)),
           el("td", { class: "sub nowrap" }, day(c.closed_on)),
           el("td", { class: "num" }, inr(c.entry)),
@@ -53,11 +53,12 @@ export async function renderTrack() {
         ))),
       )),
     el("p", { class: "note" },
-      "How this is calculated: sample calls replayed against actual daily prices. Each call exits on the first day its "
-      + "target or stop loss is touched (if a day's range touches both, the stop loss is assumed); if a day opens beyond a "
-      + "level, the exit is at the open. ₹1,00,000 per call in whole shares, after TradeSmart brokerage of ₹15 × 2 orders; "
-      + "taxes and statutory charges excluded. SELL calls are measured as short positions. "
-      + "Past performance is not indicative of future returns."),
+      "How this is calculated: the three technical setups were run on every trading day of the last 12 months, across "
+      + "all 50 stocks, exactly as they run today. Each call exits on the first day its target or stop loss is touched "
+      + "(if a day's range touches both, the stop loss is assumed); if a day opens beyond a level, the exit is at the open; "
+      + "calls still open after 60 days exit at that day's close. ₹1,00,000 per call in whole shares, after TradeSmart "
+      + "brokerage of ₹15 × 2 orders; taxes and statutory charges excluded. Past performance is not indicative of future "
+      + "returns. Fundamental picks are not included: testing them needs historical fundamentals as known at the time."),
   );
 
   chart?.remove();

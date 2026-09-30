@@ -73,7 +73,7 @@ function resultCard(p, goToRecs) {
       "Risk levels come from each stock's measured volatility over the last 6 months: Low under 20% a year, "
       + "Medium 20–28%, High above 28%. SELL calls are at least Medium."),
     el("div", { class: "actions" },
-      el("button", { class: "btn", onclick: () => goToRecs(true) }, "SEE CALLS SUITED TO ME"),
+      el("button", { class: "btn", onclick: () => goToRecs(true) }, "SEE TECHNICAL CALLS SUITED TO ME"),
       el("button", { class: "btn-link", onclick: () => { setProfile(null); renderRisk(goToRecs); } }, "Retake quiz"),
     ),
     el("p", { class: "sub" }, "Saved in this browser only. A live product would record this against your KYC, as SEBI requires."),

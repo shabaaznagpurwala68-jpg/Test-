@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TradeSmart Advisory</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/style.css" />
   </head>
@@ -20,7 +17,8 @@
         <span class="product">Advisory</span>
       </div>
       <nav class="tabs" role="tablist">
-        <button class="tab active" data-view="recs" role="tab">RECOMMENDATIONS</button>
+        <button class="tab active" data-view="technical" role="tab">TECHNICAL</button>
+        <button class="tab" data-view="markets" role="tab">MARKETS</button>
         <button class="tab" data-view="track" role="tab">TRACK RECORD</button>
         <button class="tab" data-view="news" role="tab">NEWS</button>
         <button class="tab" data-view="risk" role="tab">MY RISK PROFILE</button>
@@ -34,15 +32,16 @@
         <p><strong>Test build with sample data.</strong> Disclaimer: The securities are quoted as an example and not as a recommendation.</p>
       </div>
 
-      <section id="view-recs">
-        <div id="rec-summary" class="summary"></div>
+      <section id="view-technical">
+        <div class="intro">
+          <h2>Technical picks</h2>
+          <p class="sub">Three rule-based setups scan all 50 stocks after every market close. A call is issued only when
+            every rule in a setup passes, and its stop loss and target come from fixed formulas — no opinion involved.</p>
+        </div>
+        <div id="setup-cards" class="setup-cards"></div>
+        <div id="tech-summary" class="summary"></div>
         <div class="controls">
-          <div class="chips" id="filters">
-            <button class="chip selected" data-action="">ALL</button>
-            <button class="chip" data-action="BUY">BUY</button>
-            <button class="chip" data-action="SELL">SELL</button>
-            <button class="chip" data-action="HOLD">HOLD</button>
-          </div>
+          <div class="chips" id="setup-filter"></div>
           <label id="suited-toggle" class="toggle" hidden>
             <input type="checkbox" id="suited-only" /> <span>Suited to me only</span>
           </label>
@@ -52,16 +51,17 @@
           <table>
             <thead>
               <tr>
-                <th>Stock</th><th>Call</th><th>Risk</th><th class="num">Entry</th><th class="num">CMP</th>
+                <th>Stock</th><th>Setup</th><th>Risk</th><th class="num">Entry</th><th class="num">CMP</th>
                 <th class="num">Target</th><th class="num">Stop loss</th><th class="num">Potential</th>
                 <th>SL → Target</th><th>Issued</th>
               </tr>
             </thead>
-            <tbody id="rec-rows"></tbody>
+            <tbody id="tech-rows"></tbody>
           </table>
         </div>
       </section>
 
+      <section id="view-markets" hidden></section>
       <section id="view-track" hidden></section>
       <section id="view-news" hidden></section>
       <section id="view-risk" hidden></section>

@@ -1,89 +1,125 @@
+import json
+import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from db import get_conn, init_db
-from evaluator import close_finished_calls
 from explain import explain
-from market import annual_volatility, get_market, quote
+from indicators import annual_volatility, compute
+from market import get_market, quote
+from markets import dashboard
 from news import get_news
 from performance import summarize, trade_result
 from risk import QUESTIONS, risk_level, score
-from seed import seed_if_empty
-from universe import UNIVERSE
+from technical import HORIZON_DAYS, SETUPS, sync_calls
+from universe import INDICES, STOCKS
 
-HORIZONS = {30: "1 month", 60: "2 months", 90: "3 months", 180: "6 months"}
+_lock = threading.Lock()
+_ind_cache: dict = {"market_id": None, "indicators": None}
+
+
+def _state():
+    """Market data, its indicators (computed once per data refresh), and an up-to-date calls table."""
+    market, source = get_market()
+    with _lock:
+        if _ind_cache["market_id"] != id(market):
+            indicators = {k: compute(bars) for k, bars in market.items()}
+            sync_calls(market, source, indicators)
+            _ind_cache.update(market_id=id(market), indicators=indicators)
+    return market, source, _ind_cache["indicators"]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    seed_if_empty()
+    _state()  # download data and build the 12-month track record before the first request
     yield
 
 
 app = FastAPI(title="TradeSmart Advisory (test)", lifespan=lifespan)
 
 
-def _enrich(row: dict, bars: list[dict]) -> dict:
-    """Add stock info and live numbers to a stored call.
+def _enrich(row: dict, market: dict) -> dict:
+    """Stock info and live numbers for a stored call.
 
     progress: where the price sits between stop loss (0) and target (1).
-    The same formula works for SELL calls, where the stop loss is above the entry.
     """
-    info = UNIVERSE[row["symbol"]]
+    info, bars = STOCKS[row["symbol"]], market[row["symbol"]]
     q = quote(bars)
-    vol = annual_volatility(bars)
+    vol = annual_volatility([b["close"] for b in bars])
     c = {
         **row,
+        "signal": json.loads(row["signal"]),
         "name": info["name"],
         "sector": info["sector"],
-        "horizon": HORIZONS.get(row["horizon_days"], f"{row['horizon_days']} days"),
+        "setup_name": SETUPS[row["setup"]]["name"],
+        "horizon": f"{row['horizon_days'] // 30} months" if row["horizon_days"] % 30 == 0 else f"{row['horizon_days']} days",
         "cmp": q["price"],
         "change_pct": round((q["price"] - q["prev_close"]) / q["prev_close"] * 100, 2),
         "volatility": vol,
-        "risk_level": risk_level(vol, row["action"]),
+        "risk_level": risk_level(vol, row["setup"]),
     }
     if row["status"] == "OPEN":
-        direction = -1 if row["action"] == "SELL" else 1
         progress = (q["price"] - row["stop_loss"]) / (row["target"] - row["stop_loss"])
-        c["potential_pct"] = round(direction * (row["target"] - q["price"]) / q["price"] * 100, 2)
+        c["potential_pct"] = round((row["target"] - q["price"]) / q["price"] * 100, 2)
         c["progress"] = round(min(max(progress, 0), 1), 3)
     else:
         c.update(trade_result(row))
     return c
 
 
-def _load() -> tuple[list[dict], str, dict]:
-    """Every call, checked against the latest candles. Newly finished calls are closed and saved."""
-    market, source = get_market()
-    close_finished_calls(market)
+def _calls(market) -> list[dict]:
     with get_conn() as conn:
-        rows = [dict(r) for r in conn.execute("SELECT * FROM recommendations ORDER BY issued_on DESC, id DESC")]
-    return [_enrich(r, market[r["symbol"]]) for r in rows], source, market
+        rows = [dict(r) for r in conn.execute("SELECT * FROM calls ORDER BY issued_on DESC, id DESC")]
+    return [_enrich(r, market) for r in rows]
 
 
-def _one(rec_id: int) -> tuple[dict, str, dict]:
-    calls, source, market = _load()
-    for c in calls:
-        if c["id"] == rec_id:
-            return c, source, market
-    raise HTTPException(status_code=404, detail="recommendation not found")
+def _one(call_id: int):
+    market, source, indicators = _state()
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM calls WHERE id = ?", (call_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="call not found")
+    return _enrich(dict(row), market), market, source, indicators
 
 
-@app.get("/api/recommendations")
-def list_recommendations(
+def _setup_stats(calls: list[dict]) -> dict[str, dict]:
+    closed = [c for c in calls if c["status"] != "OPEN"]
+    by = summarize(closed)["by_setup"]
+    stats = {k: {"calls": 0, "win_rate": 0, "avg_return_pct": 0, "net_pnl": 0} for k in SETUPS}
+    for g in by:
+        key = next(k for k, s in SETUPS.items() if s["name"] == g["setup"])
+        stats[key] = g
+    for k in SETUPS:
+        stats[k]["open"] = sum(c["status"] == "OPEN" and c["setup"] == k for c in calls)
+    return stats
+
+
+@app.get("/api/setups")
+def setups():
+    market, source, _ = _state()
+    stats = _setup_stats(_calls(market))
+    return [{"key": k, **s, "stats": stats[k], "levels": {
+        "entry": "The day's closing price", "stop_loss": "Entry − 2 × ATR(14)",
+        "target": "Entry + 2 × (Entry − Stop loss) → risk-reward 1:2", "horizon": f"{HORIZON_DAYS} days"}}
+        for k, s in SETUPS.items()]
+
+
+@app.get("/api/calls")
+def list_calls(
     status: Literal["open", "closed", "all"] = "open",
-    action: Literal["BUY", "SELL", "HOLD"] | None = None,
+    setup: Literal["TREND_BREAKOUT", "MACD_MOMENTUM", "OVERSOLD_BOUNCE"] | None = None,
 ):
-    calls, source, _ = _load()
+    market, source, _ = _state()
+    calls = _calls(market)
     closed = [c for c in calls if c["status"] != "OPEN"]
     items = {"open": [c for c in calls if c["status"] == "OPEN"], "closed": closed, "all": calls}[status]
-    if action:
-        items = [c for c in items if c["action"] == action]
+    if setup:
+        items = [c for c in items if c["setup"] == setup]
     open_items = [c for c in items if c["status"] == "OPEN"]
     wins = sum(trade_result(c)["net_pnl"] > 0 for c in closed)
     return {
@@ -99,32 +135,59 @@ def list_recommendations(
     }
 
 
-@app.get("/api/recommendations/{rec_id}")
-def get_recommendation(rec_id: int):
-    c, source, _ = _one(rec_id)
+@app.get("/api/calls/{call_id}")
+def get_call(call_id: int):
+    c, _, source, _ = _one(call_id)
     return {**c, "price_source": source}
 
 
-@app.get("/api/recommendations/{rec_id}/candles")
-def get_candles(rec_id: int):
-    """Daily candles around the call: from 60 days before issue to today (open) or 30 days after exit (closed)."""
-    c, source, market = _one(rec_id)
-    start = (date.fromisoformat(c["issued_on"]) - timedelta(days=60)).isoformat()
+def _chart(key: str, market: dict, indicators: dict, start: str, end: str | None) -> dict:
+    bars, ind = market[key], indicators[key]
+    idx = [i for i, b in enumerate(bars) if b["date"] >= start and (not end or b["date"] <= end)]
+    pick = lambda name: [{"time": ind["date"][i], "value": round(ind[name][i], 4)} for i in idx if ind[name][i] is not None]
+    return {
+        "bars": [bars[i] for i in idx],
+        "sma20": pick("sma20"), "sma50": pick("sma50"), "sma200": pick("sma200"),
+        "rsi": pick("rsi"), "macd": pick("macd"), "macd_signal": pick("macd_signal"), "macd_hist": pick("macd_hist"),
+    }
+
+
+@app.get("/api/calls/{call_id}/chart")
+def call_chart(call_id: int):
+    """Candles and indicators from 90 days before issue to today (open) or 30 days after exit (closed)."""
+    c, market, _, indicators = _one(call_id)
+    start = (date.fromisoformat(c["issued_on"]) - timedelta(days=90)).isoformat()
     end = c["closed_on"] and (date.fromisoformat(c["closed_on"]) + timedelta(days=30)).isoformat()
-    bars = [b for b in market[c["symbol"]] if b["date"] >= start and (not end or b["date"] <= end)]
-    return {"bars": bars, "source": source}
+    return _chart(c["symbol"], market, indicators, start, end)
 
 
-@app.get("/api/recommendations/{rec_id}/explain")
-def get_explanation(rec_id: int):
-    c, _, _ = _one(rec_id)
-    return {"paragraphs": explain(c)}
+@app.get("/api/chart/{key}")
+def instrument_chart(key: str, days: int = 180):
+    if key not in STOCKS and key not in INDICES:
+        raise HTTPException(status_code=404, detail="unknown instrument")
+    market, _, indicators = _state()
+    start = (date.today() - timedelta(days=min(max(days, 30), 600))).isoformat()
+    return _chart(key, market, indicators, start, None)
+
+
+@app.get("/api/calls/{call_id}/explain")
+def call_explanation(call_id: int):
+    c, market, _, _ = _one(call_id)
+    return {"paragraphs": explain(c, _setup_stats(_calls(market))[c["setup"]])}
 
 
 @app.get("/api/performance")
 def performance():
-    calls, source, _ = _load()
-    return {**summarize([c for c in calls if c["status"] != "OPEN"]), "price_source": source}
+    market, source, _ = _state()
+    closed = [c for c in _calls(market) if c["status"] != "OPEN"]
+    return {**summarize(closed), "price_source": source}
+
+
+@app.get("/api/markets")
+def markets():
+    market, source, indicators = _state()
+    return {**dashboard(market, indicators), "price_source": source,
+            "as_of": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/api/news")

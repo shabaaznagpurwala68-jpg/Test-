@@ -1,9 +1,9 @@
-"""Market data: 13 months of daily candles per stock.
+"""Market data: ~2 years of daily candles for every stock and index.
 
-Live from Yahoo Finance (yfinance) when reachable, otherwise a dummy random-walk
-history. One batch download covers all stocks and is cached for 5 minutes, so
-many page loads cost one Yahoo call. The latest candle's close is the current
-price (Yahoo's own quotes are delayed ~15 min for NSE).
+Live from Yahoo Finance (yfinance) when reachable, otherwise a deterministic dummy
+history. One batch download covers everything and is cached for 5 minutes, so many
+page loads cost one Yahoo call. The latest candle's close is the current price
+(Yahoo's NSE data is delayed ~15 minutes).
 """
 
 import logging
@@ -13,77 +13,91 @@ import threading
 import time
 from datetime import date, timedelta
 
-from universe import UNIVERSE
+from universe import INDICES, STOCKS, yahoo_ticker
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 CACHE_TTL = 300
-HISTORY_DAYS = 400
+HISTORY_DAYS = 700  # 200-DMA needs ~10 months of warm-up before a 12-month backtest
 _lock = threading.Lock()
 _cache: dict = {"at": 0.0, "bars": None, "source": None}
 
 
-def _fetch_live(symbols: list[str], start: date) -> dict[str, list[dict]]:
+def _fetch_live(keys: list[str], start: date) -> dict[str, list[dict]]:
     import yfinance as yf
 
-    tickers = [f"{s}.NS" for s in symbols]  # NSE listing on Yahoo
+    tickers = [yahoo_ticker(k) for k in keys]
     df = yf.download(tickers, start=start.isoformat(), interval="1d", progress=False,
-                     auto_adjust=False, threads=True, timeout=10)
+                     auto_adjust=False, threads=True, timeout=20)
     if df is None or df.empty:
         return {}
     out = {}
-    for sym, t in zip(symbols, tickers):
+    for key, t in zip(keys, tickers):
         try:
-            frame = df[[("Open", t), ("High", t), ("Low", t), ("Close", t)]].dropna()
+            frame = df[[("Open", t), ("High", t), ("Low", t), ("Close", t), ("Volume", t)]]
         except KeyError:
             continue
+        frame = frame.dropna(subset=[("Close", t)])
         if frame.empty:
             continue
-        out[sym] = [
+        out[key] = [
             {"date": idx.date().isoformat(), "open": round(float(o), 2), "high": round(float(h), 2),
-             "low": round(float(l), 2), "close": round(float(c), 2)}
-            for idx, (o, h, l, c) in zip(frame.index, frame.itertuples(index=False))
+             "low": round(float(l), 2), "close": round(float(c), 2),
+             "volume": 0 if v != v else int(v)}  # v != v is True for NaN
+            for idx, (o, h, l, c, v) in zip(frame.index, frame.itertuples(index=False))
         ]
     return out
 
 
-def _dummy_history(symbol: str, start: date) -> list[dict]:
-    """Deterministic random walk: the same stock gives the same history on every run,
+def _dummy_history(key: str, start: date) -> list[dict]:
+    """Deterministic random walk: the same instrument gives the same history on every run,
     so charts and call outcomes stay consistent between restarts."""
-    info = UNIVERSE[symbol]
-    rng = random.Random(symbol)
-    vol = info["vol"]
+    if key in STOCKS:
+        base, vol, base_volume = STOCKS[key]["base"], STOCKS[key]["vol"], 2_000_000
+    else:
+        _, _, _, base, vol = INDICES[key]
+        base_volume = 0
+    rng = random.Random(key)
     days = [start + timedelta(d) for d in range((date.today() - start).days + 1)]
     days = [d for d in days if d.weekday() < 5]
-    # Walk backwards-anchored: end near the base price.
-    price = info["base"] * math.exp(-rng.gauss(0.06, 0.12))
+    price = base
+    drift = rng.gauss(0.0003, 0.0004)
     bars = []
     for d in days:
         o = price * (1 + rng.gauss(0, vol / 3))
-        c = o * (1 + rng.gauss(0.0004, vol))
+        c = o * (1 + rng.gauss(drift, vol))
         h = max(o, c) * (1 + abs(rng.gauss(0, vol / 2)))
         l = min(o, c) * (1 - abs(rng.gauss(0, vol / 2)))
+        # Volume: log-normal around the base, bigger on big-move days.
+        v = int(base_volume * math.exp(rng.gauss(0, 0.35)) * (1 + 25 * abs(c / o - 1))) if base_volume else 0
         bars.append({"date": d.isoformat(), "open": round(o, 2), "high": round(h, 2),
-                     "low": round(l, 2), "close": round(c, 2)})
+                     "low": round(l, 2), "close": round(c, 2), "volume": v})
         price = c
+    # Anchor: rescale so the latest close lands within ~5% of the base price. Scaling every
+    # price by one factor keeps all the daily moves (and so every indicator signal) intact.
+    factor = base * math.exp(rng.gauss(0, 0.04)) / bars[-1]["close"]
+    for b in bars:
+        for f in ("open", "high", "low", "close"):
+            b[f] = round(b[f] * factor, 2)
     return bars
 
 
 def get_market() -> tuple[dict[str, list[dict]], str]:
-    """Returns ({symbol: daily bars oldest→newest}, source) with source live|mixed|dummy."""
+    """({key: daily bars oldest→newest}, source) — source is live | mixed | dummy."""
     with _lock:  # one download at a time, even if several requests arrive together
         if _cache["bars"] is not None and time.time() - _cache["at"] < CACHE_TTL:
             return _cache["bars"], _cache["source"]
 
         start = date.today() - timedelta(days=HISTORY_DAYS)
-        symbols = list(UNIVERSE)
+        keys = list(STOCKS) + list(INDICES)
         try:
-            live = _fetch_live(symbols, start)
+            live = _fetch_live(keys, start)
         except Exception:
             live = {}
 
-        bars = {s: live.get(s) or _dummy_history(s, start) for s in symbols}
-        source = "live" if len(live) == len(symbols) else "mixed" if live else "dummy"
+        bars = {k: live.get(k) or _dummy_history(k, start) for k in keys}
+        live_stocks = sum(k in live for k in STOCKS)
+        source = "live" if live_stocks == len(STOCKS) else "mixed" if live else "dummy"
         _cache.update(at=time.time(), bars=bars, source=source)
         return bars, source
 
@@ -91,14 +105,3 @@ def get_market() -> tuple[dict[str, list[dict]], str]:
 def quote(bars: list[dict]) -> dict:
     last, prev = bars[-1], bars[-2] if len(bars) > 1 else bars[-1]
     return {"price": last["close"], "prev_close": prev["close"]}
-
-
-def annual_volatility(bars: list[dict], lookback: int = 126) -> float:
-    """Annualised volatility (%) from the last ~6 months of daily closes."""
-    closes = [b["close"] for b in bars[-(lookback + 1):]]
-    rets = [math.log(b / a) for a, b in zip(closes, closes[1:]) if a > 0]
-    if len(rets) < 2:
-        return 0.0
-    mean = sum(rets) / len(rets)
-    var = sum((r - mean) ** 2 for r in rets) / (len(rets) - 1)
-    return round(math.sqrt(var) * math.sqrt(252) * 100, 1)

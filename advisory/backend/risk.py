@@ -1,4 +1,4 @@
-"""Client risk profiling and stock risk levels.
+"""Client risk profiling and call risk levels.
 
 A client answers 7 questions (each option scores 1–4, total 7–28). The score maps
 to a profile, and each profile is suited to certain call risk levels. A call's risk
@@ -20,6 +20,7 @@ PROFILES = [  # (max score, profile, suited risk levels, description)
     (21, "Moderate", ["Low", "Medium"], "You accept some ups and downs for better growth."),
     (28, "Aggressive", ["Low", "Medium", "High"], "You can handle large swings in pursuit of higher returns."),
 ]
+LEVELS = ["Low", "Medium", "High"]
 
 
 def score(answers: list[int]) -> dict:
@@ -31,8 +32,9 @@ def score(answers: list[int]) -> dict:
     raise ValueError("score out of range")
 
 
-def risk_level(annual_vol_pct: float, action: str) -> str:
-    level = "Low" if annual_vol_pct < 20 else "Medium" if annual_vol_pct < 28 else "High"
-    if action == "SELL" and level == "Low":
-        level = "Medium"  # short positions carry open-ended risk
-    return level
+def risk_level(annual_vol_pct: float, setup: str | None = None) -> str:
+    """Low < 20% a year, Medium 20–28%, High above 28%. Counter-trend setups go one level up."""
+    idx = 0 if annual_vol_pct < 20 else 1 if annual_vol_pct < 28 else 2
+    if setup == "OVERSOLD_BOUNCE":
+        idx = min(idx + 1, 2)
+    return LEVELS[idx]

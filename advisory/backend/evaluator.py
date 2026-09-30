@@ -48,13 +48,11 @@ def close_finished_calls(market: dict[str, list[dict]]) -> int:
     """Checks every open call against its candles and saves any that closed. Returns how many."""
     closed = 0
     with get_conn() as conn:
-        for row in conn.execute("SELECT * FROM recommendations WHERE status = 'OPEN'").fetchall():
+        for row in conn.execute("SELECT * FROM calls WHERE status = 'OPEN'").fetchall():
             call = dict(row)
             status, exit_price, closed_on = evaluate(call, market[call["symbol"]])
             if status != "OPEN":
-                conn.execute(
-                    "UPDATE recommendations SET status = ?, exit_price = ?, closed_on = ? WHERE id = ?",
-                    (status, exit_price, closed_on, call["id"]),
-                )
+                conn.execute("UPDATE calls SET status = ?, exit_price = ?, closed_on = ? WHERE id = ?",
+                             (status, exit_price, closed_on, call["id"]))
                 closed += 1
     return closed

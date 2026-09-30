@@ -1,11 +1,18 @@
 import { closeDrawer } from "./drawer.js";
+import { renderMarkets } from "./markets.js";
 import { renderNews } from "./news.js";
-import { loadRecs, recState, renderRecs } from "./recs.js";
 import { onProfileChange, renderRisk } from "./risk.js";
+import { loadTechnical, renderTechnical, techState } from "./technical.js";
 import { renderTrack } from "./track.js";
 import { $ } from "./util.js";
 
-const views = { recs: loadRecs, track: renderTrack, news: renderNews, risk: () => renderRisk(goToRecs) };
+const views = {
+  technical: loadTechnical,
+  markets: renderMarkets,
+  track: renderTrack,
+  news: renderNews,
+  risk: () => renderRisk(goToTechnical),
+};
 
 function show(view) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
@@ -13,34 +20,26 @@ function show(view) {
   views[view]();
 }
 
-function goToRecs(suitedOnly = false) {
-  recState.suitedOnly = suitedOnly;
+function goToTechnical(suitedOnly = false) {
+  techState.suitedOnly = suitedOnly;
   $("suited-only").checked = suitedOnly;
-  show("recs");
+  show("technical");
 }
 
 document.querySelectorAll(".tab").forEach((tab) => (tab.onclick = () => show(tab.dataset.view)));
-
-$("filters").onclick = (e) => {
-  const chip = e.target.closest(".chip");
-  if (!chip) return;
-  document.querySelectorAll("#filters .chip").forEach((c) => c.classList.toggle("selected", c === chip));
-  recState.action = chip.dataset.action;
-  loadRecs();
-};
 $("search").oninput = (e) => {
-  recState.query = e.target.value;
-  renderRecs();
+  techState.query = e.target.value;
+  renderTechnical();
 };
 $("suited-only").onchange = (e) => {
-  recState.suitedOnly = e.target.checked;
-  renderRecs();
+  techState.suitedOnly = e.target.checked;
+  renderTechnical();
 };
-onProfileChange(() => renderRecs());
+onProfileChange(() => renderTechnical());
 
 $("drawer-close").onclick = closeDrawer;
 $("scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => e.key === "Escape" && closeDrawer());
 
-loadRecs();
-setInterval(() => !$("view-recs").hidden && loadRecs(), 60000); // backend caches prices for 5 min
+loadTechnical();
+setInterval(() => !$("view-technical").hidden && loadTechnical(), 60000); // backend caches prices for 5 min
