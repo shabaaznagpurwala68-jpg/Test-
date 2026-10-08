@@ -41,11 +41,7 @@ $("suited-only").onchange = (e) => {
 };
 onProfileChange(() => {
   renderTechnical();
-  re$("footer-signup").append(signupForm({ compact: true }));
-// A shared post link (#learn/<slug>) opens that post; otherwise start on Fundamental.
-window.addEventListener("popstate", () => location.hash.startsWith("#learn") && show("learn"));
-if (location.hash.startsWith("#learn")) show("learn");
-else renderFundamental();
+  rerenderFundamental();
 });
 
 $("drawer-close").onclick = closeDrawer;
