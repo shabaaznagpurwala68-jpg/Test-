@@ -30,7 +30,11 @@ function goToTechnical(suitedOnly = false) {
   show("technical");
 }
 
-document.querySelectorAll(".tab").forEach((tab) => (tab.onclick = () => show(tab.dataset.view)));
+document.querySelectorAll(".tab").forEach((tab) => (tab.onclick = () => {
+  // A tab click is a fresh start: LEARN opens the post list, and other tabs drop any post link.
+  history.replaceState(null, "", tab.dataset.view === "learn" ? "#learn" : location.pathname);
+  show(tab.dataset.view);
+}));
 $("search").oninput = (e) => {
   techState.query = e.target.value;
   renderTechnical();

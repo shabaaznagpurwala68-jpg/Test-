@@ -104,10 +104,17 @@ function block(b) {
   return el("p", {}, b.content);
 }
 
+/** Make the Learn tab the visible one WITHOUT re-running its loader. (Clicking the tab here
+ *  would call renderLearn, which re-opens the post from the URL — an endless reload loop.) */
+function showLearnSection() {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === "learn"));
+  document.querySelectorAll("main > section[id^='view-']").forEach((sec) => { sec.hidden = sec.id !== "view-learn"; });
+}
+
 export async function openPost(slug) {
   const p = await api(`/posts/${encodeURIComponent(slug)}`);
   if (location.hash !== `#learn/${slug}`) history.pushState(null, "", `#learn/${slug}`);
-  document.querySelector('.tab[data-view="learn"]')?.click();
+  showLearnSection();
   $("view-learn").replaceChildren(
     el("article", { class: "article" },
       el("a", { href: "#learn", class: "back", onclick: (e) => { e.preventDefault(); history.pushState(null, "", "#learn"); renderList(); } }, "← All posts"),
