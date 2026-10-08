@@ -1,12 +1,15 @@
 import json
+import re
+import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from blog import all_posts, newsletter_issue
 from db import get_conn, init_db
 from explain import explain
 from fundamentals import (PICK_SCORE, PICK_UPSIDE, STOP_LOSS_PCT, TARGET_CAP, evaluate_all as evaluate_fundamentals,
@@ -239,6 +242,62 @@ def fundamental_detail(symbol: str):
 def news(symbol: str | None = None):
     items, source = get_news(symbol)
     return {"items": items, "source": source}
+
+
+def _learn_data():
+    market, source, indicators = _state()
+    calls = _calls(market)
+    perf = summarize([c for c in calls if c["status"] != "OPEN"])
+    mk = dashboard(market, indicators)
+    return market, mk, calls, perf
+
+
+@app.get("/api/posts")
+def posts(category: Literal["Market Events", "Guides", "Weekly Wrap"] | None = None):
+    _, mk, calls, perf = _learn_data()
+    items = [{k: v for k, v in p.items() if k != "body"} for p in all_posts(mk, calls, perf)]
+    return {"items": [p for p in items if not category or p["category"] == category]}
+
+
+@app.get("/api/posts/{slug}")
+def post(slug: str):
+    _, mk, calls, perf = _learn_data()
+    items = all_posts(mk, calls, perf)
+    p = next((p for p in items if p["slug"] == slug), None)
+    if p is None:
+        raise HTTPException(status_code=404, detail="post not found")
+    related = [{k: v for k, v in r.items() if k != "body"} for r in items if r["slug"] != slug]
+    related.sort(key=lambda r: r["category"] != p["category"])  # same category first
+    return {**p, "body": [{"type": t, "content": c} for t, c in p["body"]], "related": related[:3]}
+
+
+@app.get("/api/newsletter/latest")
+def newsletter_latest():
+    market, mk, calls, perf = _learn_data()
+    return newsletter_issue(mk, calls, perf, evaluate_fundamentals(market), all_posts(mk, calls, perf))
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+
+class Subscription(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    frequency: Literal["WEEKLY", "EVENTS"] = "WEEKLY"
+
+
+@app.post("/api/newsletter/subscribe", status_code=201)
+def subscribe(body: Subscription, response: Response):
+    email = body.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=422, detail="Please enter a valid email address.")
+    try:
+        with get_conn() as conn:
+            conn.execute("INSERT INTO subscribers (email, frequency) VALUES (?, ?)", (email, body.frequency))
+    except sqlite3.IntegrityError:
+        response.status_code = 200  # nothing new was created
+        return {"status": "already", "message": "You're already subscribed. See you in your inbox."}
+    return {"status": "subscribed", "message": "You're in. The Smart Weekly lands in your inbox every week."
+            if body.frequency == "WEEKLY" else "You're in. We'll email you when a big market event is coming up."}
 
 
 class RiskAnswers(BaseModel):

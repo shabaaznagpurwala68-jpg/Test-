@@ -38,6 +38,17 @@ def init_db() -> None:
             """
         )
         conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        # Newsletter sign-ups. Added without a schema-version bump so existing calls are kept.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscribers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                frequency TEXT NOT NULL CHECK (frequency IN ('WEEKLY', 'EVENTS')),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
 
 
 def get_meta(conn: sqlite3.Connection, key: str) -> str | None:

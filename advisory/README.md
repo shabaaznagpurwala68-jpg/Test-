@@ -17,6 +17,7 @@ charts from TradingView Lightweight Charts (Apache-2.0), fonts and logo from the
 | **Markets** | Indian and global indices, USD/INR, crude, gold, US 10Y, Dollar Index; breadth; 9 scanners; a sortable stock screener; valuation ratios (aggregate PE/PB/yield of the 50, peer-group medians, and PE, PB, EPS, ROE, ROCE, D/E, yield, growth, promoter holding per stock). |
 | **Track record** | The same setups replayed over the last 12 months: win rate, P&L on ₹1 lakh per call after ₹15 × 2 brokerage, equity curve, results by setup and sector. |
 | **News** | ET / Moneycontrol / Livemint headlines (headline + link only), tagged by stock. |
+| **Learn** | Blog with 6 sample posts (Market Events, Guides, and a Weekly Wrap built from the app's own data), a reading view with shareable links (`#learn/<slug>`), and **The Smart Weekly** newsletter: sign-ups stored in SQLite, plus a preview of this week's issue generated from the app's data. Emails are not sent in this demo. To add a post, append it to `backend/blog_posts.py`. |
 | **My risk profile** | 7-question quiz → Conservative / Moderate / Aggressive; calls are marked suited or not. |
 
 **Technical levels:** entry = close; stop loss = entry − 2 × ATR(14); target = entry + 2 × risk (1:2); 60-day limit.
@@ -66,4 +67,5 @@ Open http://localhost:5180. The top-right badge shows whether prices are LIVE or
 - `GET /api/markets` — indices, breadth, scanners, stock screener
 - `GET /api/performance` — track record
 - `GET /api/news?symbol=RELIANCE`
+- `GET /api/posts?category=…`, `GET /api/posts/{slug}`, `GET /api/newsletter/latest`, `POST /api/newsletter/subscribe`
 - `GET /api/risk/questions`, `POST /api/risk/score`

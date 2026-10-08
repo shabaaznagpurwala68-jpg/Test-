@@ -1,5 +1,6 @@
 import { closeDrawer } from "./drawer.js";
 import { renderFundamental, rerenderFundamental } from "./fundamental.js";
+import { renderLearn, signupForm } from "./learn.js";
 import { renderMarkets } from "./markets.js";
 import { renderNews } from "./news.js";
 import { onProfileChange, renderRisk } from "./risk.js";
@@ -13,6 +14,7 @@ const views = {
   markets: renderMarkets,
   track: renderTrack,
   news: renderNews,
+  learn: renderLearn,
   risk: () => renderRisk(goToTechnical),
 };
 
@@ -39,12 +41,20 @@ $("suited-only").onchange = (e) => {
 };
 onProfileChange(() => {
   renderTechnical();
-  rerenderFundamental();
+  re$("footer-signup").append(signupForm({ compact: true }));
+// A shared post link (#learn/<slug>) opens that post; otherwise start on Fundamental.
+window.addEventListener("popstate", () => location.hash.startsWith("#learn") && show("learn"));
+if (location.hash.startsWith("#learn")) show("learn");
+else renderFundamental();
 });
 
 $("drawer-close").onclick = closeDrawer;
 $("scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => e.key === "Escape" && closeDrawer());
 
-renderFundamental();
+$("footer-signup").append(signupForm({ compact: true }));
+// A shared post link (#learn/<slug>) opens that post; otherwise start on Fundamental.
+window.addEventListener("popstate", () => location.hash.startsWith("#learn") && show("learn"));
+if (location.hash.startsWith("#learn")) show("learn");
+else renderFundamental();
 setInterval(() => !$("view-technical").hidden && loadTechnical(), 60000); // backend caches prices for 5 min
