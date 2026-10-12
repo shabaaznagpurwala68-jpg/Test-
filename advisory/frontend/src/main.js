@@ -1,3 +1,4 @@
+import { renderAsk } from "./ask.js";
 import { closeDrawer } from "./drawer.js";
 import { renderFundamental, rerenderFundamental } from "./fundamental.js";
 import { renderLearn, signupForm } from "./learn.js";
@@ -16,6 +17,7 @@ const views = {
   news: renderNews,
   learn: renderLearn,
   risk: () => renderRisk(goToTechnical),
+  ask: renderAsk,
 };
 
 function show(view) {

@@ -7,8 +7,10 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from agent import ask as agent_ask
 from blog import all_posts, newsletter_issue
 from db import get_conn, init_db
 from explain import explain
@@ -315,3 +317,21 @@ def risk_score(body: RiskAnswers):
         if not 0 <= a < len(QUESTIONS[i][1]):
             raise HTTPException(status_code=422, detail=f"answer {i + 1} is out of range")
     return score(body.answers)
+
+
+class Turn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class Question(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    history: list[Turn] = Field(default_factory=list, max_length=8)  # earlier turns, for follow-ups
+
+
+@app.post("/api/ask")
+def ask(body: Question):
+    """Streams the assistant's progress as newline-delimited JSON (see agent.ask for the event types)."""
+    events = agent_ask(body.question.strip(), [t.model_dump() for t in body.history])
+    return StreamingResponse((json.dumps(e, ensure_ascii=False) + "\n" for e in events),
+                             media_type="application/x-ndjson")

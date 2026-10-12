@@ -19,6 +19,7 @@ charts from TradingView Lightweight Charts (Apache-2.0), fonts and logo from the
 | **News** | ET / Moneycontrol / Livemint headlines (headline + link only), tagged by stock. |
 | **Learn** | Blog with 6 sample posts (Market Events, Guides, and a Weekly Wrap built from the app's own data), a reading view with shareable links (`#learn/<slug>`), and **The Smart Weekly** newsletter: sign-ups stored in SQLite, plus a preview of this week's issue generated from the app's data. Emails are not sent in this demo. To add a post, append it to `backend/blog_posts.py`. |
 | **My risk profile** | 7-question quiz → Conservative / Moderate / Aggressive; calls are marked suited or not. |
+| **Ask AI** | Chat that answers stock questions with live prices (TradeSmart API or NSE MCP) and the scorecard, using a local Ollama model. See [Ask AI](#ask-ai-optional). |
 
 **Technical levels:** entry = close; stop loss = entry − 2 × ATR(14); target = entry + 2 × risk (1:2); 60-day limit.
 **Fundamental levels:** fair value = forward EPS × blended PE (½ peer median + ½ own PE), forward EPS growth capped
@@ -47,6 +48,28 @@ npm run dev
 
 Open http://localhost:5180. The top-right badge shows whether prices are LIVE or DUMMY.
 
+## Ask AI (optional)
+
+The **Ask AI** tab answers questions like "What is the price of Infosys?" or "Is HDFC Bank fundamentally
+strong?" with a local model in [Ollama](https://ollama.com). The model never invents numbers: it calls tools
+in `backend/agent.py` and words the answer from what they return. Every answer lists the data it used and
+ends with a not-investment-advice line added by the code.
+
+| Tool | Data |
+|---|---|
+| `get_quote` | TradeSmart API (real-time) if configured, else NSE's official MCP server (1–3 min delayed), else the Yahoo cache |
+| `get_index_quote`, `get_market_movers` | NSE MCP (`https://mcp.nseindia.in/cmmkt/mcp`, no login) |
+| `get_fundamentals` | This app's scorecard |
+| `find_symbol` | The Nifty 50 list in `universe.py` |
+
+Setup: install Ollama and run `ollama pull qwen3.5:4b` (any model with tool calling works; set `OLLAMA_MODEL`).
+A 4B model on CPU takes 40–75 s per answer.
+
+TradeSmart prices (optional): create an API app in your TradeSmart account, set `TS_APP_KEY`, `TS_SECRET_KEY`
+and `TS_CLIENT_ID`, run `uv run python ts_login.py` and follow its prompts, then set `TS_CLIENT_ID` and
+`TS_ACCESS_TOKEN` before starting the backend. Keep these values out of the repo.
+NSE's MCP data is for informational and educational use only, not commercial deployment.
+
 ## Data rules
 
 - Calls are stored in `backend/advisory.db` and never rewritten: new days are scanned as they arrive,
@@ -69,3 +92,4 @@ Open http://localhost:5180. The top-right badge shows whether prices are LIVE or
 - `GET /api/news?symbol=RELIANCE`
 - `GET /api/posts?category=…`, `GET /api/posts/{slug}`, `GET /api/newsletter/latest`, `POST /api/newsletter/subscribe`
 - `GET /api/risk/questions`, `POST /api/risk/score`
+- `POST /api/ask` — Ask AI; body `{question, history}`, streams newline-delimited JSON events (`tool`, `delta`, `answer`, `error`)
